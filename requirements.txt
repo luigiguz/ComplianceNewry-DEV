@@ -1,0 +1,11 @@
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
+requests
+google-cloud-aiplatform
+google-cloud-bigquery
+flask 
+google-cloud-storage 
+psycopg2>=2.9.0
+python-dotenv>=0.21.0
+google-cloud-secret-manager>=2.16.0 
