@@ -10,9 +10,11 @@ for env_path in env_paths:
     if os.path.exists(env_path):
         load_dotenv(env_path)
         env_loaded = True
+        print(f"✅ Variables de entorno cargadas desde: {env_path}")
         break
 
-from secret_manager_utils import setup_environment_from_secrets, get_secret_client
+if not env_loaded:
+    print("⚠️  No se encontró archivo .env. Asegúrate de crear uno con las variables necesarias.")
 
 # Configuración de palabras clave para filtrado de correos
 PALABRAS_CLAVE = [
@@ -42,20 +44,9 @@ CAMPOS_VERTEX = [
 class Config:
     """Clase para manejar la configuración del sistema."""
     
-    def __init__(self, use_secret_manager: bool = True):
-        """
-        Inicializa la configuración.
-        
-        Args:
-            use_secret_manager: Si True, carga configuración desde Secret Manager
-        """
-        if use_secret_manager:
-            try:
-                setup_environment_from_secrets()
-                print("Configuración cargada desde Secret Manager")
-            except Exception as e:
-                print(f"Advertencia: No se pudo cargar desde Secret Manager: {e}")
-                print("Usando variables de entorno locales")
+    def __init__(self):
+        """Inicializa la configuración usando variables de entorno locales."""
+        pass
     
     @property
     def gmail_user(self) -> str:
@@ -127,6 +118,11 @@ class Config:
         """Ruta a las credenciales OAuth2."""
         return os.getenv('OAUTH_CREDENTIALS', 'credentials_oauth.json')
     
+    @property
+    def service_credentials_path(self) -> str:
+        """Ruta a las credenciales de servicio de GCP."""
+        return os.getenv('GOOGLE_APPLICATION_CREDENTIALS', 'credentials_service.json')
+    
     def validate_config(self) -> List[str]:
         """
         Valida que la configuración esté completa.
@@ -173,6 +169,8 @@ class Config:
         print(f"Bucket Name: {self.bucket_name}")
         print(f"PostgreSQL Host: {self.pg_host}")
         print(f"PostgreSQL Database: {self.pg_database}")
+        print(f"OAuth Credentials: {self.oauth_credentials_path}")
+        print(f"Service Credentials: {self.service_credentials_path}")
         print("================================")
 
 # Instancia global de configuración

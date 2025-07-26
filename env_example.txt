@@ -1,0 +1,33 @@
+# Configuración de Gmail
+GMAIL_USER=tu-email@gmail.com
+
+# Configuración de Google Cloud Platform
+GCP_PROJECT=tu-proyecto-id
+GOOGLE_CLOUD_PROJECT=tu-proyecto-id
+
+# Configuración de Vertex AI
+VERTEX_PROJECT_ID=tu-proyecto-id
+VERTEX_LOCATION=us-central1
+VERTEX_ENDPOINT_ID=
+
+# Configuración de BigQuery
+BIGQUERY_TABLE=tu-proyecto.tu-dataset.tabla_compliance
+
+# Configuración de Cloud Storage
+BUCKET_NAME=tu-bucket-name
+
+# Configuración de PostgreSQL (opcional)
+PG_HOST=localhost
+PG_PORT=5432
+PG_USER=tu-usuario
+PG_PASSWORD=tu-password
+PG_DATABASE=tu-database
+
+# Configuración de credenciales OAuth2
+OAUTH_CREDENTIALS=credentials_oauth.json
+
+# Configuración de credenciales de servicio (para GCP)
+GOOGLE_APPLICATION_CREDENTIALS=credentials_service.json
+
+# URL de endpoint externo (opcional)
+ENDPOINT_URL= 

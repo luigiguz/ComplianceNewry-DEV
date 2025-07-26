@@ -31,11 +31,8 @@ ComplianceIssues - V.1/
 │   ├── postgres_utils.py         # Operaciones con PostgreSQL
 │   ├── bigquery_utils.py         # Operaciones con BigQuery
 │   ├── config.py                 # Configuración centralizada
-│   ├── secret_manager_utils.py   # Gestión de Secret Manager
 │   ├── gmail_oauth.py            # Autenticación OAuth2
 │   ├── test_local.py             # Script de pruebas locales
-│   ├── migrate_to_secrets.py     # Script de migración a Secret Manager
-│   ├── test_secret_manager.py    # Pruebas de Secret Manager
 │   └── token.pickle              # Token de autenticación OAuth2
 ├── credentials_oauth.json        # Credenciales OAuth2 para Gmail
 ├── credentials_service.json      # Credenciales de Service Account
@@ -54,7 +51,6 @@ ComplianceIssues - V.1/
   - BigQuery
   - Cloud Storage
   - CloudSQL (PostgreSQL)
-  - **Secret Manager** (nuevo)
 - ✅ Buzón de **Gmail** con acceso delegado
 - ✅ **Python 3.8** o superior
 - ✅ **PostgreSQL** configurado (CloudSQL recomendado)
@@ -69,39 +65,9 @@ cd "ComplianceIssues - V.1"
 pip install -r requirements.txt
 ```
 
-### 2. Configuración de Secret Manager (Recomendado)
+### 2. Configuración con Variables de Entorno
 
-El sistema ahora usa **Google Cloud Secret Manager** para gestionar de forma segura todas las credenciales y configuraciones.
-
-#### 2.1 Habilitar Secret Manager
-```bash
-# Habilitar la API de Secret Manager
-gcloud services enable secretmanager.googleapis.com
-```
-
-#### 2.2 Configurar permisos
-```bash
-# Dar permisos a la cuenta de servicio
-gcloud projects add-iam-policy-binding TU_PROYECTO \
-    --member="serviceAccount:TU_SERVICE_ACCOUNT@TU_PROYECTO.iam.gserviceaccount.com" \
-    --role="roles/secretmanager.secretAccessor"
-```
-
-#### 2.3 Migrar configuración existente
-```bash
-# Ejecutar script de migración
-python src/migrate_to_secrets.py
-```
-
-#### 2.4 Verificar configuración
-```bash
-# Probar que Secret Manager funciona
-python src/test_secret_manager.py
-```
-
-### 3. Configuración Tradicional (Variables de Entorno)
-
-Si prefieres usar variables de entorno (no recomendado para producción):
+El sistema usa variables de entorno locales para la configuración:
 
 Crea un archivo `.env` en el directorio raíz:
 
@@ -303,10 +269,10 @@ gcloud functions deploy compliance-processor \
 python src/test_local.py
 ```
 
-### Pruebas de Secret Manager
+### Pruebas Locales
 ```bash
-# Probar configuración de Secret Manager
-python src/test_secret_manager.py
+# Probar configuración local
+python src/test_local.py
 ```
 
 ### Script Personalizado
@@ -386,13 +352,13 @@ graph TD
 - Verifica conexiones a bases de datos
 - Revisa permisos de APIs
 - Monitorea cuotas de Vertex AI
-- **Verifica acceso a Secret Manager**
+- Verifica configuración del archivo .env
 
 ### Actualizaciones
 - Mantén actualizadas las dependencias
 - Revisa cambios en las APIs de Google
 - Actualiza las palabras clave según necesidades
-- **Rota los secretos regularmente**
+- Mantén seguras las credenciales locales
 
 ---
 
