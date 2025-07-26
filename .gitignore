@@ -1,0 +1,30 @@
+# Archivos de credenciales y tokens (CRÍTICO - NO SUBIR)
+credentials_*.json
+token.pickle
+*.pickle
+
+# Archivos de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.env
+.venv/
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+*.log
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Archivos temporales
+*.tmp
+*.temp 
