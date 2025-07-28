@@ -3,7 +3,6 @@ import base64
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from datetime import datetime, timedelta
-import pdfkit
 from google.cloud import storage
 from config import PALABRAS_CLAVE, get_config
 
@@ -21,33 +20,74 @@ def gmail_service():
 
 def gmail_service_oauth():
     """Servicio de Gmail usando OAuth2."""
-    import os.path
-    import pickle
+    import json
+    import tempfile
     from google_auth_oauthlib.flow import InstalledAppFlow
     from googleapiclient.discovery import build
     from google.auth.transport.requests import Request
+    from google.cloud import secretmanager
     
     config = get_config()
     SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
-    creds = None
     
-    # Usar la ruta de credenciales desde la configuración
-    credentials_path = config.oauth_credentials_path
-    
-    if os.path.exists('token.pickle'):
-        with open('token.pickle', 'rb') as token:
-            creds = pickle.load(token)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
+    try:
+        # En Cloud Run, usar Application Default Credentials
+        # que automáticamente manejan la autenticación
+        service = build('gmail', 'v1')
+        
+        # Verificar que podemos acceder al servicio
+        # Esto fallará si no tenemos permisos correctos
+        service.users().getProfile(userId='me').execute()
+        
+        return service
+        
+    except Exception as e:
+        # Si falla, intentar con credenciales desde Secret Manager
+        try:
+            # Obtener credenciales OAuth desde Secret Manager
+            secret_client = secretmanager.SecretManagerServiceClient()
+            secret_name = f"projects/{config.gcp_project}/secrets/oauth-credentials/versions/latest"
+            response = secret_client.access_secret_version(request={"name": secret_name})
+            credentials_json = response.payload.data.decode("UTF-8")
+            
+            # Crear archivo temporal con las credenciales
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
+                temp_file.write(credentials_json)
+                temp_credentials_path = temp_file.name
+            
+            # Usar las credenciales para autenticación
             flow = InstalledAppFlow.from_client_secrets_file(
-                credentials_path, SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open('token.pickle', 'wb') as token:
-            pickle.dump(creds, token)
-    service = build('gmail', 'v1', credentials=creds)
-    return service
+                temp_credentials_path, SCOPES)
+            
+            # En Cloud Run, no podemos usar run_local_server
+            # Usar credenciales de servicio con delegación
+            from google.oauth2 import service_account
+            
+            # Obtener credenciales de servicio desde Secret Manager
+            service_secret_name = f"projects/{config.gcp_project}/secrets/service-credentials/versions/latest"
+            service_response = secret_client.access_secret_version(request={"name": service_secret_name})
+            service_credentials_json = service_response.payload.data.decode("UTF-8")
+            
+            # Crear archivo temporal para credenciales de servicio
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_service_file:
+                temp_service_file.write(service_credentials_json)
+                temp_service_path = temp_service_file.name
+            
+            # Usar credenciales de servicio con delegación
+            credentials = service_account.Credentials.from_service_account_file(
+                temp_service_path, scopes=SCOPES)
+            delegated_credentials = credentials.with_subject(config.gmail_user)
+            
+            service = build('gmail', 'v1', credentials=delegated_credentials)
+            
+            # Limpiar archivos temporales
+            os.unlink(temp_credentials_path)
+            os.unlink(temp_service_path)
+            
+            return service
+            
+        except Exception as inner_e:
+            raise Exception(f"No se pudo autenticar con Gmail: {str(inner_e)}")
 
 def listar_correos(service, max_results=50, fecha_desde=None):
     """

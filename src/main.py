@@ -4,6 +4,7 @@ from vertex_utils import analizar_texto_vertex
 from bigquery_utils import insertar_en_bigquery, correo_ya_procesado
 from postgres_utils import insertar_en_postgresql, correo_ya_procesado_postgresql, insertar_tarea_postgresql
 from execution_control import obtener_ultima_ejecucion, registrar_ejecucion
+from cloud_logging import get_logger
 from config import PALABRAS_CLAVE, CAMPOS_VERTEX, get_config, validate_and_print_config
 import os
 from datetime import datetime
@@ -47,12 +48,13 @@ def crear_datos_tarea(correo_id, resultado_json):
 def main(request: Request):
     """Función principal para Cloud Function con control de ejecuciones."""
     tiempo_inicio = time.time()
+    logger = get_logger()
     
-    print("[LOG] Iniciando procesamiento de correos...")
-    print("")
+    logger.log_execution_start(mode="detecting", max_results=0)
     
     # Validar configuración
     if not validate_and_print_config():
+        logger.error("Configuración inválida")
         return {'error': 'Configuración inválida', 'status': 'error'}, 400
     
     # Obtener configuración
@@ -66,22 +68,22 @@ def main(request: Request):
         fecha_desde = ultima_ejecucion
         max_results = 100
         modo = "incremental"
-        print(f"[LOG] Modo: Incremental desde {fecha_desde}")
+        logger.info(f"Modo: Incremental desde {fecha_desde}")
     else:
         # Primera ejecución: carga inicial completa
         fecha_desde = None
         max_results = 500
         modo = "carga_inicial"
-        print("[LOG] Modo: Carga inicial (primera ejecución)")
+        logger.info("Modo: Carga inicial (primera ejecución)")
     
     # Procesar correos
     service = gmail_service_oauth()
-    print("[LOG] Servicio de Gmail inicializado.")
-    print("")
+    logger.info("Servicio de Gmail inicializado")
+    
     correos = listar_correos(service, max_results=max_results, fecha_desde=fecha_desde)
-    print(f"[LOG] Correos encontrados: {len(correos)}")
-    print(f"[LOG] Modo de ejecución: {modo}")
-    print("")
+    logger.info(f"Correos encontrados: {len(correos)}", correos_count=len(correos))
+    
+    logger.log_execution_start(mode=modo, max_results=max_results, fecha_desde=fecha_desde)
     resultados = []
     for correo in correos:
         # Obtener metadatos del correo
@@ -89,28 +91,32 @@ def main(request: Request):
         remitente = correo.get('from', '')
         destinatario = correo.get('to', '')
         fecha = correo.get('date', '')
-        print(f"[LOG] Asunto detectado: '{asunto}' para correo ID: {correo['id']}")
-        print("")
+        
+        logger.log_correo_procesado(
+            correo_id=correo['id'],
+            asunto=asunto,
+            relevante=asunto_relevante(asunto)
+        )
+        
         if not asunto_relevante(asunto):
-            print(f"[LOG] Correo ID: {correo['id']} ignorado por asunto irrelevante: {asunto}")
-            print("")
+            logger.info(f"Correo ignorado por asunto irrelevante: {asunto}", 
+                       correo_id=correo['id'], asunto=asunto)
             continue
-        print(f"[LOG] Procesando correo ID: {correo['id']}")
-        print("")
+            
+        logger.info(f"Procesando correo: {asunto}", correo_id=correo['id'])
         if correo_ya_procesado(correo['id'], config.bigquery_table):
-            print(f"[LOG] Correo ID: {correo['id']} ya fue procesado. Saltando.")
-            print("")
+            logger.info(f"Correo ya procesado, saltando", correo_id=correo['id'])
             continue
+            
         contenido = obtener_html_correo(service, correo['id'])
         if contenido:
-            print("[LOG] Guardando HTML en Cloud Storage...")
+            logger.info("Guardando HTML en Cloud Storage", correo_id=correo['id'])
             correo_url = guardar_html_en_storage(contenido, correo['id'], config.bucket_name, asunto, remitente, destinatario, fecha)
-            print(f"[LOG] HTML subido a: {correo_url}")
-            print("[LOG] Contenido extraído, enviando a Gemini...")
-            print("")
+            logger.info(f"HTML subido a Cloud Storage", correo_id=correo['id'], url=correo_url)
+            
+            logger.info("Enviando contenido a Vertex AI", correo_id=correo['id'])
             resultado_vertex = analizar_texto_vertex(contenido)
-            print(f"[LOG] Respuesta de Gemini: {resultado_vertex}")
-            print("")
+            logger.info("Respuesta recibida de Vertex AI", correo_id=correo['id'])
             respuesta_limpia = resultado_vertex.strip()
             if respuesta_limpia.startswith('```'):
                 partes = respuesta_limpia.split('```')
@@ -174,25 +180,23 @@ def main(request: Request):
                 else:
                     datos[campo] = valor
             insertar_en_bigquery(datos, config.bigquery_table)
-            print("[LOG] Resultado insertado en BigQuery.")
+            logger.info("Resultado insertado en BigQuery", correo_id=correo['id'])
+            
             # Insertar en PostgreSQL si no ha sido procesado
             if not correo_ya_procesado_postgresql(datos["CorreoId"]):
                 insertar_en_postgresql(datos)
-                print("[LOG] Resultado insertado en PostgreSQL.")
+                logger.info("Resultado insertado en PostgreSQL", correo_id=correo['id'])
                 
                 # Crear tarea basada en el análisis del correo
                 datos_tarea = crear_datos_tarea(correo['id'], resultado_json)
                 insertar_tarea_postgresql(datos_tarea)
-                print("[LOG] Tarea creada en PostgreSQL.")
-                print("")
+                logger.info("Tarea creada en PostgreSQL", correo_id=correo['id'])
             else:
-                print("[LOG] Correo ya procesado en PostgreSQL.")
-                print("")
-            print("")
+                logger.info("Correo ya procesado en PostgreSQL", correo_id=correo['id'])
+                
             resultados.append({'id': correo['id'], 'analisis': resultado_vertex})
         else:
-            print("[LOG] No se pudo extraer contenido del correo.")
-            print("")
+            logger.warning("No se pudo extraer contenido del correo", correo_id=correo['id'])
     # Calcular duración y registrar ejecución
     tiempo_fin = time.time()
     duracion = tiempo_fin - tiempo_inicio
@@ -215,9 +219,12 @@ def main(request: Request):
         modo=modo
     )
     
-    print("[LOG] Procesamiento finalizado.")
-    print(f"[LOG] Duración total: {duracion:.2f} segundos")
-    print("")
+    logger.log_execution_end(
+        mode=modo,
+        correos_procesados=len(correos),
+        duracion=duracion,
+        estado='COMPLETADO'
+    )
     
     return {
         'resultados': resultados, 

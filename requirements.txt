@@ -5,7 +5,10 @@ requests
 google-cloud-aiplatform
 google-cloud-bigquery
 google-cloud-secret-manager
+google-cloud-logging
 flask 
+flask-cors
+flasgger
 google-cloud-storage 
-psycopg2>=2.9.0
+psycopg2-binary>=2.9.0
  
