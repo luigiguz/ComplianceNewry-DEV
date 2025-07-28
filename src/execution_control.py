@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 from postgres_utils import get_postgres_connection
+from cloud_logging import get_logger
 
 def obtener_ultima_ejecucion():
     """
@@ -25,15 +26,18 @@ def obtener_ultima_ejecucion():
         cursor.close()
         conn.close()
         
+        logger = get_logger()
+        
         if resultado and resultado[0]:
-            print(f"[LOG] Última ejecución encontrada: {resultado[0]}")
+            logger.info(f"Última ejecución encontrada: {resultado[0]}")
             return resultado[0]
         else:
-            print("[LOG] No se encontraron ejecuciones previas (primera ejecución)")
+            logger.info("No se encontraron ejecuciones previas (primera ejecución)")
             return None
             
     except Exception as e:
-        print(f"[LOG] Error obteniendo última ejecución: {e}")
+        logger = get_logger()
+        logger.error(f"Error obteniendo última ejecución: {e}")
         return None  # En caso de error, asumir primera ejecución
 
 def registrar_ejecucion(fecha_inicio, fecha_fin, correos_procesados, estado, duracion, modo):
@@ -69,11 +73,13 @@ def registrar_ejecucion(fecha_inicio, fecha_fin, correos_procesados, estado, dur
         cursor.close()
         conn.close()
         
-        print(f"[LOG] Ejecución registrada: {ejecucion_id}")
-        print(f"[LOG] Modo: {modo}, Correos procesados: {correos_procesados}, Duración: {duracion:.2f}s")
+        logger = get_logger()
+        logger.info(f"Ejecución registrada: {ejecucion_id}")
+        logger.info(f"Modo: {modo}, Correos procesados: {correos_procesados}, Duración: {duracion:.2f}s")
         
     except Exception as e:
-        print(f"[LOG] Error registrando ejecución: {e}")
+        logger = get_logger()
+        logger.error(f"Error registrando ejecución: {e}")
 
 def obtener_estadisticas_ejecuciones():
     """
@@ -112,5 +118,6 @@ def obtener_estadisticas_ejecuciones():
         return None
         
     except Exception as e:
-        print(f"[LOG] Error obteniendo estadísticas: {e}")
+        logger = get_logger()
+        logger.error(f"Error obteniendo estadísticas: {e}")
         return None 

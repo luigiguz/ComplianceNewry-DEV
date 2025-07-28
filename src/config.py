@@ -1,6 +1,7 @@
 import os
 from typing import Dict, List, Optional
 from google.cloud import secretmanager
+from cloud_logging import get_logger
 
 # Configuración de palabras clave para filtrado de correos
 PALABRAS_CLAVE = [
@@ -19,22 +20,16 @@ PALABRAS_CLAVE = [
     "release failed", "action required", "immediate changes required",
     "ios submission", "android submission", "submission",
     # Nuevas palabras clave para capturar más correos relevantes
-    "issues", "issue", "problem", "problems",
-    "build", "uploaded build", "build issues", "build failed",
-    "stability", "stability issues", "trending stability",
+    "build issues", "build failed", "uploaded build has one or more issues",
+    "stability issues", "trending stability",
     "crash", "crashes", "crashlytics",
-    "samsung", "issue report", "samsung issue",
-    "app store connect", "processing", "completed processing", "failed processing",
-    "version", "version processing", "processing completed",
-    "android", "ios", "platform issues",
-    "widget", "widget issues", "widget problem",
-    "monetization", "ads", "ad policy", "ad violation",
+    "samsung issue report",
+    "failed processing",
+    "widget issues", "widget problem",
     "store policy", "store guidelines", "guideline violation",
-    "app store", "google play", "play store",
-    "developer", "developer account", "account issues",
-    "payment", "payment issues", "billing",
-    "security", "security alert", "security issue",
-    "performance", "performance issues", "performance problem"
+    "developer account issues",
+    "payment issues", "billing issues",
+    "performance issues", "performance problem"
 ]
 
 # Configuración de campos esperados de Vertex AI
@@ -52,6 +47,7 @@ class Config:
         self._client = secretmanager.SecretManagerServiceClient()
         self._project_id = self._get_project_id()
         self._cache = {}
+        self.logger = get_logger()
     
     def _get_project_id(self) -> str:
         """Obtiene el ID del proyecto de GCP."""
@@ -224,9 +220,9 @@ class Config:
                 break
         
         if pg_configured:
-            print("✅ Configuración de PostgreSQL detectada")
+            self.logger.info("Configuración de PostgreSQL detectada")
         else:
-            print("⚠️  Configuración de PostgreSQL no encontrada (opcional)")
+            self.logger.warning("Configuración de PostgreSQL no encontrada (opcional)")
         
         return errors
     
@@ -242,18 +238,18 @@ class Config:
     
     def print_config_summary(self):
         """Imprime un resumen de la configuración actual."""
-        print("=== RESUMEN DE CONFIGURACIÓN (Secret Manager) ===")
-        print(f"Gmail User: {self.gmail_user}")
-        print(f"GCP Project: {self.gcp_project}")
-        print(f"Vertex Project ID: {self.vertex_project_id}")
-        print(f"Vertex Location: {self.vertex_location}")
-        print(f"BigQuery Table: {self.bigquery_table}")
-        print(f"Bucket Name: {self.bucket_name}")
-        print(f"PostgreSQL Host: {self.pg_host}")
-        print(f"PostgreSQL Database: {self.pg_database}")
-        print(f"OAuth Credentials: {self.oauth_credentials_path}")
-        print(f"Service Credentials: {self.service_credentials_path}")
-        print("================================================")
+        self.logger.info("=== RESUMEN DE CONFIGURACIÓN (Secret Manager) ===")
+        self.logger.info(f"Gmail User: {self.gmail_user}")
+        self.logger.info(f"GCP Project: {self.gcp_project}")
+        self.logger.info(f"Vertex Project ID: {self.vertex_project_id}")
+        self.logger.info(f"Vertex Location: {self.vertex_location}")
+        self.logger.info(f"BigQuery Table: {self.bigquery_table}")
+        self.logger.info(f"Bucket Name: {self.bucket_name}")
+        self.logger.info(f"PostgreSQL Host: {self.pg_host}")
+        self.logger.info(f"PostgreSQL Database: {self.pg_database}")
+        self.logger.info(f"OAuth Credentials: {self.oauth_credentials_path}")
+        self.logger.info(f"Service Credentials: {self.service_credentials_path}")
+        self.logger.info("================================================")
 
 # Instancia global de configuración
 _config = None
@@ -272,14 +268,15 @@ def validate_and_print_config():
         errors = config.validate_config()
         
         if errors:
-            print("❌ Errores de configuración encontrados:")
+            config.logger.error("Errores de configuración encontrados:")
             for error in errors:
-                print(f"  - {error}")
+                config.logger.error(f"  - {error}")
             return False
         else:
-            print("✅ Configuración válida")
+            config.logger.info("Configuración válida")
             config.print_config_summary()
             return True
     except Exception as e:
-        print(f"❌ Error al inicializar configuración: {e}")
+        logger = get_logger()
+        logger.error(f"Error al inicializar configuración: {e}")
         return False 
