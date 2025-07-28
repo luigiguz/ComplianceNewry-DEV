@@ -1,20 +1,6 @@
 import os
 from typing import Dict, List, Optional
-from dotenv import load_dotenv
-
-# Cargar .env desde múltiples ubicaciones
-env_paths = ['.env', 'src/.env', '../.env']
-env_loaded = False
-
-for env_path in env_paths:
-    if os.path.exists(env_path):
-        load_dotenv(env_path)
-        env_loaded = True
-        print(f"✅ Variables de entorno cargadas desde: {env_path}")
-        break
-
-if not env_loaded:
-    print("⚠️  No se encontró archivo .env. Asegúrate de crear uno con las variables necesarias.")
+from google.cloud import secretmanager
 
 # Configuración de palabras clave para filtrado de correos
 PALABRAS_CLAVE = [
@@ -31,7 +17,24 @@ PALABRAS_CLAVE = [
     "inactivity", "no recent updates",
     "screenshot policy", "visual asset violation",
     "release failed", "action required", "immediate changes required",
-    "ios submission", "android submission", "submission"
+    "ios submission", "android submission", "submission",
+    # Nuevas palabras clave para capturar más correos relevantes
+    "issues", "issue", "problem", "problems",
+    "build", "uploaded build", "build issues", "build failed",
+    "stability", "stability issues", "trending stability",
+    "crash", "crashes", "crashlytics",
+    "samsung", "issue report", "samsung issue",
+    "app store connect", "processing", "completed processing", "failed processing",
+    "version", "version processing", "processing completed",
+    "android", "ios", "platform issues",
+    "widget", "widget issues", "widget problem",
+    "monetization", "ads", "ad policy", "ad violation",
+    "store policy", "store guidelines", "guideline violation",
+    "app store", "google play", "play store",
+    "developer", "developer account", "account issues",
+    "payment", "payment issues", "billing",
+    "security", "security alert", "security issue",
+    "performance", "performance issues", "performance problem"
 ]
 
 # Configuración de campos esperados de Vertex AI
@@ -42,86 +45,150 @@ CAMPOS_VERTEX = [
 ]
 
 class Config:
-    """Clase para manejar la configuración del sistema."""
+    """Clase para manejar la configuración del sistema usando Google Secret Manager."""
     
     def __init__(self):
-        """Inicializa la configuración usando variables de entorno locales."""
-        pass
+        """Inicializa la configuración usando Google Secret Manager."""
+        self._client = secretmanager.SecretManagerServiceClient()
+        self._project_id = self._get_project_id()
+        self._cache = {}
+    
+    def _get_project_id(self) -> str:
+        """Obtiene el ID del proyecto de GCP."""
+        # 1. Intentar obtener desde variable de entorno (desarrollo local y Cloud Run)
+        project_id = os.getenv('GOOGLE_CLOUD_PROJECT') or os.getenv('GCP_PROJECT')
+        if project_id:
+            return project_id
+        
+        # 2. Intentar obtener desde Secret Manager
+        try:
+            project_id = self._get_secret('gcp-project-id')
+            if project_id:
+                return project_id
+        except:
+            pass
+        
+        # 3. Intentar obtener desde metadata (Cloud Run, Cloud Functions, etc.)
+        try:
+            import requests
+            response = requests.get(
+                'http://metadata.google.internal/computeMetadata/v1/project/project-id',
+                headers={'Metadata-Flavor': 'Google'},
+                timeout=1
+            )
+            if response.status_code == 200:
+                return response.text
+        except:
+            pass
+        
+        raise ValueError("No se pudo determinar el ID del proyecto de GCP. Configura GOOGLE_CLOUD_PROJECT, GCP_PROJECT, o crea el secreto 'gcp-project-id' en Secret Manager")
+    
+    def _get_secret(self, secret_name: str) -> str:
+        """Obtiene un secreto desde Google Secret Manager."""
+        if secret_name in self._cache:
+            return self._cache[secret_name]
+        
+        try:
+            name = f"projects/{self._project_id}/secrets/{secret_name}/versions/latest"
+            response = self._client.access_secret_version(request={"name": name})
+            secret_value = response.payload.data.decode("UTF-8")
+            self._cache[secret_name] = secret_value
+            return secret_value
+        except Exception as e:
+            raise ValueError(f"No se pudo obtener el secreto '{secret_name}': {e}")
     
     @property
     def gmail_user(self) -> str:
         """Email del buzón de Gmail a monitorear."""
-        return os.getenv('GMAIL_USER', '')
+        return self._get_secret('gmail-user')
     
     @property
     def gcp_project(self) -> str:
         """ID del proyecto de GCP."""
-        return os.getenv('GCP_PROJECT') or os.getenv('GOOGLE_CLOUD_PROJECT', '')
+        return self._project_id
     
     @property
     def vertex_project_id(self) -> str:
         """ID del proyecto para Vertex AI."""
-        return os.getenv('VERTEX_PROJECT_ID') or self.gcp_project
+        return self._project_id
     
     @property
     def vertex_location(self) -> str:
         """Región de Vertex AI."""
-        return os.getenv('VERTEX_LOCATION', 'us-central1')
+        try:
+            return self._get_secret('vertex-location')
+        except:
+            return 'us-central1'
     
     @property
     def vertex_endpoint_id(self) -> Optional[str]:
         """ID del endpoint de Vertex AI (opcional)."""
-        return os.getenv('VERTEX_ENDPOINT_ID')
+        try:
+            return self._get_secret('vertex-endpoint-id')
+        except:
+            return None
     
     @property
     def bigquery_table(self) -> str:
         """Tabla de BigQuery para almacenar resultados."""
-        return os.getenv('BIGQUERY_TABLE', 'proyecto.dataset.tabla_compliance')
+        return self._get_secret('bigquery-table')
     
     @property
     def bucket_name(self) -> str:
         """Nombre del bucket de Cloud Storage."""
-        return os.getenv('BUCKET_NAME', 'compliance-storage')
+        return self._get_secret('bucket-name')
     
     @property
     def pg_host(self) -> str:
         """Host de la base de datos PostgreSQL."""
-        return os.getenv('PG_HOST', '')
+        return self._get_secret('pg-host')
     
     @property
     def pg_port(self) -> int:
         """Puerto de la base de datos PostgreSQL."""
-        return int(os.getenv('PG_PORT', '5432'))
+        try:
+            return int(self._get_secret('pg-port'))
+        except:
+            return 5432
     
     @property
     def pg_user(self) -> str:
         """Usuario de la base de datos PostgreSQL."""
-        return os.getenv('PG_USER', '')
+        return self._get_secret('pg-user')
     
     @property
     def pg_password(self) -> str:
         """Contraseña de la base de datos PostgreSQL."""
-        return os.getenv('PG_PASSWORD', '')
+        return self._get_secret('pg-password')
     
     @property
     def pg_database(self) -> str:
         """Nombre de la base de datos PostgreSQL."""
-        return os.getenv('PG_DATABASE', '')
+        return self._get_secret('pg-database')
     
     @property
     def endpoint_url(self) -> Optional[str]:
         """URL de endpoint externo (opcional)."""
-        return os.getenv('ENDPOINT_URL')
+        try:
+            return self._get_secret('endpoint-url')
+        except:
+            return None
     
     @property
     def oauth_credentials_path(self) -> str:
         """Ruta a las credenciales OAuth2."""
-        return os.getenv('OAUTH_CREDENTIALS', 'credentials_oauth.json')
+        try:
+            return self._get_secret('oauth-credentials-path')
+        except:
+            return 'credentials_oauth.json'
     
     @property
     def service_credentials_path(self) -> str:
         """Ruta a las credenciales de servicio de GCP."""
-        return os.getenv('GOOGLE_APPLICATION_CREDENTIALS', 'credentials_service.json')
+        try:
+            return self._get_secret('service-credentials-path')
+        except:
+            return 'credentials_service.json'
     
     def validate_config(self) -> List[str]:
         """
@@ -132,19 +199,34 @@ class Config:
         """
         errors = []
         
-        if not self.gmail_user:
-            errors.append("GMAIL_USER no está configurado")
+        # Verificar secretos requeridos
+        required_secrets = [
+            'gmail-user',
+            'bigquery-table',
+            'bucket-name'
+        ]
         
-        if not self.gcp_project:
-            errors.append("GCP_PROJECT no está configurado")
-        
-        if not self.bigquery_table:
-            errors.append("BIGQUERY_TABLE no está configurado")
+        for secret in required_secrets:
+            try:
+                self._get_secret(secret)
+            except Exception as e:
+                errors.append(f"Secreto '{secret}' no encontrado: {e}")
         
         # Validar configuración de PostgreSQL si se va a usar
-        if any([self.pg_host, self.pg_user, self.pg_password, self.pg_database]):
-            if not all([self.pg_host, self.pg_user, self.pg_password, self.pg_database]):
-                errors.append("Configuración de PostgreSQL incompleta")
+        pg_secrets = ['pg-host', 'pg-user', 'pg-password', 'pg-database']
+        pg_configured = True
+        
+        for secret in pg_secrets:
+            try:
+                self._get_secret(secret)
+            except:
+                pg_configured = False
+                break
+        
+        if pg_configured:
+            print("✅ Configuración de PostgreSQL detectada")
+        else:
+            print("⚠️  Configuración de PostgreSQL no encontrada (opcional)")
         
         return errors
     
@@ -160,7 +242,7 @@ class Config:
     
     def print_config_summary(self):
         """Imprime un resumen de la configuración actual."""
-        print("=== RESUMEN DE CONFIGURACIÓN ===")
+        print("=== RESUMEN DE CONFIGURACIÓN (Secret Manager) ===")
         print(f"Gmail User: {self.gmail_user}")
         print(f"GCP Project: {self.gcp_project}")
         print(f"Vertex Project ID: {self.vertex_project_id}")
@@ -171,7 +253,7 @@ class Config:
         print(f"PostgreSQL Database: {self.pg_database}")
         print(f"OAuth Credentials: {self.oauth_credentials_path}")
         print(f"Service Credentials: {self.service_credentials_path}")
-        print("================================")
+        print("================================================")
 
 # Instancia global de configuración
 _config = None
@@ -185,15 +267,19 @@ def get_config() -> Config:
 
 def validate_and_print_config():
     """Valida la configuración e imprime errores si los hay."""
-    config = get_config()
-    errors = config.validate_config()
-    
-    if errors:
-        print("❌ Errores de configuración encontrados:")
-        for error in errors:
-            print(f"  - {error}")
-        return False
-    else:
-        print("✅ Configuración válida")
-        config.print_config_summary()
-        return True 
+    try:
+        config = get_config()
+        errors = config.validate_config()
+        
+        if errors:
+            print("❌ Errores de configuración encontrados:")
+            for error in errors:
+                print(f"  - {error}")
+            return False
+        else:
+            print("✅ Configuración válida")
+            config.print_config_summary()
+            return True
+    except Exception as e:
+        print(f"❌ Error al inicializar configuración: {e}")
+        return False 

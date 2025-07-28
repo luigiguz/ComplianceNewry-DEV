@@ -102,7 +102,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
+# .env files are no longer used - we use Google Secret Manager instead
 .venv
 env/
 venv/

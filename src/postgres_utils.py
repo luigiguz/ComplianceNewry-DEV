@@ -1,9 +1,7 @@
 import os
 import psycopg2
 from psycopg2 import sql
-from dotenv import load_dotenv
 from config import get_config
-load_dotenv()
 
 def get_postgres_connection():
     """Devuelve una conexión a la base de datos PostgreSQL usando la configuración del sistema."""

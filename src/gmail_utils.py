@@ -3,11 +3,9 @@ import base64
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
 import pdfkit
 from google.cloud import storage
 from config import PALABRAS_CLAVE, get_config
-load_dotenv()
 
 def gmail_service():
     """Servicio de Gmail usando Service Account."""
@@ -51,10 +49,25 @@ def gmail_service_oauth():
     service = build('gmail', 'v1', credentials=creds)
     return service
 
-def listar_correos(service, max_results=50):
-    fecha = (datetime.utcnow() - timedelta(days=30)).strftime('%Y/%m/%d')
-    query = f'after:{fecha}'  # Traer correos de los últimos 30 días
-    results = service.users().messages().list(userId='me', q=query, maxResults=max_results).execute()
+def listar_correos(service, max_results=50, fecha_desde=None):
+    """
+    Lista correos con filtro opcional de fecha
+    """
+    if fecha_desde:
+        # Formato requerido por Gmail API: YYYY/MM/DD
+        fecha_str = fecha_desde.strftime('%Y/%m/%d')
+        query = f'after:{fecha_str}'
+        results = service.users().messages().list(
+            userId='me', 
+            q=query, 
+            maxResults=max_results
+        ).execute()
+    else:
+        # Sin filtro de fecha (carga inicial)
+        results = service.users().messages().list(
+            userId='me', 
+            maxResults=max_results
+        ).execute()
     mensajes = results.get('messages', [])
     correos = []
     for mensaje in mensajes:

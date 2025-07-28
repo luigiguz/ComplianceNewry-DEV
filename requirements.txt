@@ -4,8 +4,8 @@ google-auth-oauthlib
 requests
 google-cloud-aiplatform
 google-cloud-bigquery
+google-cloud-secret-manager
 flask 
 google-cloud-storage 
 psycopg2>=2.9.0
-python-dotenv>=0.21.0
  

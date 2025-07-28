@@ -1,9 +1,7 @@
 import os
-from dotenv import load_dotenv
 from vertexai.generative_models import GenerativeModel
 from vertexai import init
 from config import get_config
-load_dotenv()
 
 def analizar_texto_vertex(texto):
     """Analiza el texto usando Gemini Pro en Vertex AI Generative AI para extraer entidades, clasificar y sugerir solución."""

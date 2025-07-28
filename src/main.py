@@ -1,10 +1,9 @@
-from dotenv import load_dotenv
-load_dotenv()
 from flask import Request
 from gmail_utils import gmail_service_oauth, listar_correos, obtener_html_correo, guardar_html_en_storage, asunto_relevante
 from vertex_utils import analizar_texto_vertex
 from bigquery_utils import insertar_en_bigquery, correo_ya_procesado
 from postgres_utils import insertar_en_postgresql, correo_ya_procesado_postgresql, insertar_tarea_postgresql
+from execution_control import obtener_ultima_ejecucion, registrar_ejecucion
 from config import PALABRAS_CLAVE, CAMPOS_VERTEX, get_config, validate_and_print_config
 import os
 from datetime import datetime
@@ -12,6 +11,7 @@ import json
 import re
 import warnings
 import email.utils
+import time
 warnings.filterwarnings("ignore", category=UserWarning, module="vertexai")
 
 def convertir_fecha_correo(fecha_str):
@@ -45,7 +45,9 @@ def crear_datos_tarea(correo_id, resultado_json):
     return datos_tarea
 
 def main(request: Request):
-    """Función principal para Cloud Function."""
+    """Función principal para Cloud Function con control de ejecuciones."""
+    tiempo_inicio = time.time()
+    
     print("[LOG] Iniciando procesamiento de correos...")
     print("")
     
@@ -56,11 +58,29 @@ def main(request: Request):
     # Obtener configuración
     config = get_config()
     
+    # Detectar automáticamente el tipo de ejecución
+    ultima_ejecucion = obtener_ultima_ejecucion()
+    
+    if ultima_ejecucion:
+        # Ejecución incremental: solo correos nuevos
+        fecha_desde = ultima_ejecucion
+        max_results = 100
+        modo = "incremental"
+        print(f"[LOG] Modo: Incremental desde {fecha_desde}")
+    else:
+        # Primera ejecución: carga inicial completa
+        fecha_desde = None
+        max_results = 500
+        modo = "carga_inicial"
+        print("[LOG] Modo: Carga inicial (primera ejecución)")
+    
+    # Procesar correos
     service = gmail_service_oauth()
     print("[LOG] Servicio de Gmail inicializado.")
     print("")
-    correos = listar_correos(service, max_results=20)
+    correos = listar_correos(service, max_results=max_results, fecha_desde=fecha_desde)
     print(f"[LOG] Correos encontrados: {len(correos)}")
+    print(f"[LOG] Modo de ejecución: {modo}")
     print("")
     resultados = []
     for correo in correos:
@@ -173,6 +193,35 @@ def main(request: Request):
         else:
             print("[LOG] No se pudo extraer contenido del correo.")
             print("")
+    # Calcular duración y registrar ejecución
+    tiempo_fin = time.time()
+    duracion = tiempo_fin - tiempo_inicio
+    
+    # Obtener fecha del último correo procesado (si hay)
+    ultima_fecha_correo = None
+    if correos and len(correos) > 0:
+        ultimo_correo = correos[0]  # El más reciente
+        fecha_ultimo = ultimo_correo.get('date', '')
+        if fecha_ultimo:
+            ultima_fecha_correo = convertir_fecha_correo(fecha_ultimo)
+    
+    # Registrar la ejecución
+    registrar_ejecucion(
+        fecha_inicio=datetime.utcnow(),
+        fecha_fin=ultima_fecha_correo,
+        correos_procesados=len(correos),
+        estado='COMPLETADO',
+        duracion=duracion,
+        modo=modo
+    )
+    
     print("[LOG] Procesamiento finalizado.")
+    print(f"[LOG] Duración total: {duracion:.2f} segundos")
     print("")
-    return {'resultados': resultados} 
+    
+    return {
+        'resultados': resultados, 
+        'modo': modo, 
+        'correos_procesados': len(correos),
+        'duracion_segundos': duracion
+    } 

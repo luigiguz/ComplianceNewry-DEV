@@ -1,8 +1,6 @@
 import os
 from google.cloud import bigquery
-from dotenv import load_dotenv
 from config import get_config
-load_dotenv()
 
 def insertar_en_bigquery(datos, tabla):
     """Inserta los datos en la tabla de BigQuery especificada."""
