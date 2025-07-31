@@ -20,9 +20,10 @@ def gmail_service():
     return service
 
 def gmail_service_oauth():
-    """Servicio de Gmail usando OAuth2."""
+    """Servicio de Gmail usando OAuth2 con credenciales desde Secret Manager."""
     import os.path
     import pickle
+    import tempfile
     from google_auth_oauthlib.flow import InstalledAppFlow
     from googleapiclient.discovery import build
     from google.auth.transport.requests import Request
@@ -31,21 +32,45 @@ def gmail_service_oauth():
     SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
     creds = None
     
-    # Usar la ruta de credenciales desde la configuración
-    credentials_path = config.oauth_credentials_path
-    
     if os.path.exists('token.pickle'):
         with open('token.pickle', 'rb') as token:
             creds = pickle.load(token)
+    
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                credentials_path, SCOPES)
-            creds = flow.run_local_server(port=0)
+            # Obtener credenciales desde Secret Manager
+            try:
+                # Intentar obtener las credenciales OAuth desde Secret Manager
+                oauth_credentials_json = config._get_secret('oauth-credentials')
+                
+                # Crear un archivo temporal con las credenciales
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
+                    temp_file.write(oauth_credentials_json)
+                    temp_credentials_path = temp_file.name
+                
+                try:
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        temp_credentials_path, SCOPES)
+                    creds = flow.run_local_server(port=0)
+                finally:
+                    # Limpiar el archivo temporal
+                    os.unlink(temp_credentials_path)
+                    
+            except Exception as e:
+                # Fallback: intentar usar archivo local si existe
+                credentials_path = config.oauth_credentials_path
+                if os.path.exists(credentials_path):
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        credentials_path, SCOPES)
+                    creds = flow.run_local_server(port=0)
+                else:
+                    raise ValueError(f"No se pudieron obtener las credenciales OAuth desde Secret Manager ni desde archivo local: {e}")
+        
         with open('token.pickle', 'wb') as token:
             pickle.dump(creds, token)
+    
     service = build('gmail', 'v1', credentials=creds)
     return service
 

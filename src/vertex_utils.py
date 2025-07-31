@@ -2,15 +2,17 @@ import os
 from vertexai.generative_models import GenerativeModel
 from vertexai import init
 from config import get_config
+from cloud_logging import get_logger
 
 def analizar_texto_vertex(texto):
     """Analiza el texto usando Gemini Pro en Vertex AI Generative AI para extraer entidades, clasificar y sugerir solución."""
     # Obtener configuración
     config = get_config()
+    logger = get_logger()
     
-    # Prints de depuración
-    print("PROJECT_ID:", config.vertex_project_id)
-    print("LOCATION:", config.vertex_location)
+    # Logs de depuración usando Cloud Logging
+    logger.debug(f"Vertex AI - PROJECT_ID: {config.vertex_project_id}")
+    logger.debug(f"Vertex AI - LOCATION: {config.vertex_location}")
     
     # Inicializa Vertex AI (esto se puede llamar varias veces sin problema)
     init(project=config.vertex_project_id, location=config.vertex_location)
