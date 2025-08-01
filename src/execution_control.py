@@ -13,10 +13,10 @@ def obtener_ultima_ejecucion():
         cursor = conn.cursor()
         
         query = """
-        SELECT UltimaFechaCorreo
+        SELECT ultimafechacorreo
         FROM compliance_db."ComplianceEjecuciones" 
-        WHERE Estado = 'COMPLETADO' 
-        ORDER BY FechaEjecucion DESC 
+        WHERE estado = 'COMPLETADO' 
+        ORDER BY fechaejecucion DESC 
         LIMIT 1
         """
         
@@ -40,9 +40,9 @@ def obtener_ultima_ejecucion():
         logger.error(f"Error obteniendo última ejecución: {e}")
         return None  # En caso de error, asumir primera ejecución
 
-def registrar_ejecucion(fecha_inicio, fecha_fin, correos_procesados, estado, duracion, modo):
+def registrar_ejecucion(fecha_inicio, fecha_fin, correos_procesados, estado, duracion, modo, fecha_inicio_ventana=None, fecha_fin_ventana=None):
     """
-    Registra una nueva ejecución en PostgreSQL
+    Registra una nueva ejecución en PostgreSQL con control de ventana dinámica
     """
     try:
         ejecucion_id = f"exec_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
@@ -52,9 +52,12 @@ def registrar_ejecucion(fecha_inicio, fecha_fin, correos_procesados, estado, dur
         
         query = """
         INSERT INTO compliance_db."ComplianceEjecuciones" 
-        (id, FechaEjecucion, UltimaFechaCorreo, CorreosProcesados, Estado, DuracionSegundos, Modo, FechaCreacion)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        (id, fechaejecucion, ultimafechacorreo, correosprocesados, estado, duracionsegundos, modo, fechacreacion, "FechaInicioVentana", "FechaFinVentana", "TipoVentana")
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
+        
+        # Determinar tipo de ventana basado en el modo
+        tipo_ventana = 'primera_ejecucion' if modo == 'primera_ejecucion' else 'ventana_dinamica'
         
         valores = (
             ejecucion_id,
@@ -64,7 +67,10 @@ def registrar_ejecucion(fecha_inicio, fecha_fin, correos_procesados, estado, dur
             estado,
             duracion,
             modo,
-            datetime.utcnow()
+            datetime.utcnow(),
+            fecha_inicio_ventana,
+            fecha_fin_ventana,
+            tipo_ventana
         )
         
         cursor.execute(query, valores)
@@ -92,12 +98,12 @@ def obtener_estadisticas_ejecuciones():
         query = """
         SELECT 
             COUNT(*) as total_ejecuciones,
-            COUNT(CASE WHEN Estado = 'COMPLETADO' THEN 1 END) as exitosas,
-            COUNT(CASE WHEN Estado = 'ERROR' THEN 1 END) as fallidas,
-            AVG(DuracionSegundos) as duracion_promedio,
-            MAX(FechaEjecucion) as ultima_ejecucion
+            COUNT(CASE WHEN estado = 'COMPLETADO' THEN 1 END) as exitosas,
+            COUNT(CASE WHEN estado = 'ERROR' THEN 1 END) as fallidas,
+            AVG(duracionsegundos) as duracion_promedio,
+            MAX(fechaejecucion) as ultima_ejecucion
         FROM compliance_db."ComplianceEjecuciones"
-        WHERE FechaEjecucion >= NOW() - INTERVAL '30 days'
+        WHERE fechaejecucion >= NOW() - INTERVAL '30 days'
         """
         
         cursor.execute(query)

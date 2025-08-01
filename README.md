@@ -140,7 +140,10 @@ CREATE TABLE compliance_db."ComplianceEjecuciones" (
   Estado VARCHAR(20) NOT NULL,
   DuracionSegundos FLOAT,
   Modo VARCHAR(20),
-  FechaCreacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  FechaCreacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FechaInicioVentana TIMESTAMP,
+  FechaFinVentana TIMESTAMP,
+  TipoVentana VARCHAR(50) DEFAULT 'dinamica'
 );
 ```
 
@@ -160,8 +163,8 @@ El sistema filtra correos usando palabras clave específicas para compliance:
 
 ## Modos de Ejecución
 
-- **Carga Inicial:** Procesa hasta 500 correos (primera ejecución)
-- **Incremental:** Procesa hasta 100 correos nuevos (ejecuciones posteriores)
+- **Primera Ejecución:** Procesa correos de las últimas 24 horas (máximo 200 correos)
+- **Ventana Dinámica:** Procesa correos desde la última ejecución hasta ahora (máximo 200 correos)
 
 ## Troubleshooting
 

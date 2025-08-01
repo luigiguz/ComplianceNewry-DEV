@@ -77,7 +77,8 @@ class Config:
         except:
             pass
         
-        raise ValueError("No se pudo determinar el ID del proyecto de GCP. Configura GOOGLE_CLOUD_PROJECT, GCP_PROJECT, o crea el secreto 'gcp-project-id' en Secret Manager")
+        # 4. Valor por defecto fijo para newry-dev
+        return "newry-dev"
     
     def _get_secret(self, secret_name: str) -> str:
         """Obtiene un secreto desde Google Secret Manager."""

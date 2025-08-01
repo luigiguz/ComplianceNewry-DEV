@@ -71,17 +71,18 @@ def main(request: Request):
     ultima_ejecucion = obtener_ultima_ejecucion()
     
     if ultima_ejecucion:
-        # Ejecución incremental: solo correos nuevos
+        # Ejecución dinámica: desde la última ejecución hasta ahora
         fecha_desde = ultima_ejecucion
-        max_results = 100
-        modo = "incremental"
-        logger.info(f"Modo: Incremental desde {fecha_desde}")
+        max_results = 200  # Límite razonable para ventanas dinámicas
+        modo = "ventana_dinamica"
+        logger.info(f"Modo: Ventana dinámica desde {fecha_desde}")
     else:
-        # Primera ejecución: carga inicial completa
-        fecha_desde = None
-        max_results = 500
-        modo = "carga_inicial"
-        logger.info("Modo: Carga inicial (primera ejecución)")
+        # Primera ejecución: ventana de 24 horas hacia atrás
+        from datetime import timedelta
+        fecha_desde = datetime.utcnow() - timedelta(hours=24)
+        max_results = 200
+        modo = "primera_ejecucion"
+        logger.info(f"Modo: Primera ejecución - ventana de 24h desde {fecha_desde}")
     
     # Procesar correos
     service = gmail_service_oauth()
@@ -216,14 +217,16 @@ def main(request: Request):
         if fecha_ultimo:
             ultima_fecha_correo = convertir_fecha_correo(fecha_ultimo)
     
-    # Registrar la ejecución
+    # Registrar la ejecución con control de ventana dinámica
     registrar_ejecucion(
         fecha_inicio=datetime.utcnow(),
         fecha_fin=ultima_fecha_correo,
         correos_procesados=len(correos),
         estado='COMPLETADO',
         duracion=duracion,
-        modo=modo
+        modo=modo,
+        fecha_inicio_ventana=fecha_desde,
+        fecha_fin_ventana=datetime.utcnow()
     )
     
     logger.log_execution_end(
