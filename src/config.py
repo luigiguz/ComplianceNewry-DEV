@@ -39,6 +39,14 @@ CAMPOS_VERTEX = [
     'PrioridadId', 'EstimacionDias'
 ]
 
+# Configuración de paralelización
+CONFIG_PARALELO = {
+    'max_workers': 5,           # Número de hilos simultáneos
+    'timeout_por_correo': 30,   # Segundos máximo por correo
+    'retry_attempts': 3,        # Intentos por correo fallido
+    'batch_size': 50,           # Correos por lote
+}
+
 class Config:
     """Clase para manejar la configuración del sistema usando Google Secret Manager."""
     

@@ -101,7 +101,10 @@ swagger_template = {
     "jquery_js": "//unpkg.com/jquery@2.2.4/dist/jquery.min.js",
     "swagger_ui_css": "//unpkg.com/swagger-ui-dist@3/swagger-ui.css",
     "favicon": "//unpkg.com/swagger-ui-dist@3/favicon-32x32.png",
-    "swagger_ui_js": "//unpkg.com/swagger-ui-dist@3/swagger-ui.js"
+    "swagger_ui_js": "//unpkg.com/swagger-ui-dist@3/swagger-ui.js",
+    "customSiteTitle": "Compliance Newry API",
+    "customfavIcon": "//unpkg.com/swagger-ui-dist@3/favicon-32x32.png",
+    "customCssUrl": "data:text/css;base64," + "LmZsYXNnZ2VyLWZvb3RlciB7IGRpc3BsYXk6IG5vbmUgIWltcG9ydGFudDsgfQ=="
 }
 
 swagger = Swagger(app, config=swagger_config, template=swagger_template, decorators=[lambda f: f])
